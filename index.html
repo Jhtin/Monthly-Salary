@@ -27,8 +27,9 @@
   <div class="app-shell">
     <header class="topbar">
       <div class="brand"><div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3v3M17 3v3M4.5 9h15M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/><path d="m8.5 14 2 2 5-5"/></svg></div><div><h1>Workday</h1><p>Salary tracker</p></div></div>
-      <div class="header-actions">
-        <button class="icon-button" id="themeBtn" title="Toggle dark mode" aria-label="Toggle dark mode"><svg viewBox="0 0 24 24"><path d="M20.4 15.1A8.5 8.5 0 0 1 8.9 3.6 8.5 8.5 0 1 0 20.4 15.1Z"/></svg></button>
+      <button class="icon-button mobile-menu-toggle" id="mobileMenuBtn" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="mobileMenu"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+      <div class="header-actions" id="mobileMenu">
+        <button class="icon-button" id="themeBtn" title="Toggle dark mode" aria-label="Toggle dark mode"><svg viewBox="0 0 24 24"><path d="M20.4 15.1A8.5 8.5 0 0 1 8.9 3.6 8.5 8.5 0 1 0 20.4 15.1Z"/></svg><span class="mobile-action-label">Theme</span></button>
         <button class="button secondary" id="exportBtn"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2"/></svg>Export</button>
       </div>
       <span id="linksBtn" hidden aria-hidden="true"></span>
@@ -68,5 +69,17 @@
   <div class="toast" id="toast">Saved</div>
   <script src="firebase-sync.js"></script>
   <script src="app.js"></script>
+  <script>
+    (()=>{
+      const toggle=document.getElementById('mobileMenuBtn');
+      const menu=document.getElementById('mobileMenu');
+      if(!toggle||!menu)return;
+      const closeMenu=()=>{menu.classList.remove('mobile-open');toggle.setAttribute('aria-expanded','false');toggle.setAttribute('aria-label','Open menu')};
+      toggle.addEventListener('click',()=>{const open=menu.classList.toggle('mobile-open');toggle.setAttribute('aria-expanded',String(open));toggle.setAttribute('aria-label',open?'Close menu':'Open menu')});
+      menu.addEventListener('click',e=>{if(e.target.closest('button')&&window.innerWidth<=700)closeMenu()});
+      document.addEventListener('click',e=>{if(window.innerWidth<=700&&!menu.contains(e.target)&&!toggle.contains(e.target))closeMenu()});
+      window.addEventListener('resize',()=>{if(window.innerWidth>700)closeMenu()});
+    })();
+  </script>
 </body>
 </html>
