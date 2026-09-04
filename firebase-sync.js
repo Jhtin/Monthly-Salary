@@ -17,6 +17,7 @@
   let syncingFromCloud = false;
   let saveTimer = null;
   let unsubscribeCloud = null;
+  let pendingRemoteState = null;
 
   function getLocalState() {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); }
@@ -52,6 +53,27 @@
       el.dataset.tone = tone;
       el.title = tone === "error" ? "Open the browser console for Firebase details" : "Firebase cloud sync status";
     }
+  }
+
+  function applyPendingRemoteState() {
+    if (!pendingRemoteState || typeof window.workdayApplyCloudState !== "function") return false;
+    const next = pendingRemoteState;
+    pendingRemoteState = null;
+    return window.workdayApplyCloudState(next);
+  }
+
+  function ensureLiveUpdateBridge() {
+    if (typeof window.workdayApplyCloudState === "function") {
+      applyPendingRemoteState();
+      return;
+    }
+    if (document.querySelector('script[data-workday-live-bridge]')) return;
+    const script = document.createElement("script");
+    script.src = "live-update.js";
+    script.dataset.workdayLiveBridge = "true";
+    script.onload = () => applyPendingRemoteState();
+    script.onerror = () => console.error("Could not load live-update.js");
+    document.body.appendChild(script);
   }
 
   function ensureAuthButton() {
@@ -140,26 +162,20 @@
     }
   };
 
-  function updateRunningApp(remoteState) {
-    try {
-      if (typeof state !== "object" || !state || typeof render !== "function") return false;
-      const copy = JSON.parse(JSON.stringify(remoteState));
-      Object.keys(state).forEach(key => delete state[key]);
-      Object.assign(state, copy);
-      render();
-      return true;
-    } catch (error) {
-      console.error("Live UI update error", error);
-      return false;
-    }
-  }
-
   function applyRemoteState(remoteState) {
     if (!remoteState || stable(remoteState) === stable(getLocalState())) return false;
+
     syncingFromCloud = true;
     originalSetItem.call(localStorage, STORAGE_KEY, JSON.stringify(remoteState));
-    updateRunningApp(remoteState);
     syncingFromCloud = false;
+
+    pendingRemoteState = remoteState;
+    if (typeof window.workdayApplyCloudState === "function") {
+      applyPendingRemoteState();
+    } else {
+      ensureLiveUpdateBridge();
+    }
+
     setSyncStatus("Updated from cloud");
     return true;
   }
@@ -208,6 +224,7 @@
 
   async function init() {
     ensureAuthButton();
+    ensureLiveUpdateBridge();
     setSyncStatus("Connecting…");
     try {
       const [appMod, authMod, firestoreMod] = await Promise.all([
