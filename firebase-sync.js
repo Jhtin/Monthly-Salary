@@ -23,8 +23,19 @@
     catch { return null; }
   }
 
+  function canonicalize(value) {
+    if (Array.isArray(value)) return value.map(canonicalize);
+    if (value && typeof value === "object") {
+      return Object.keys(value).sort().reduce((out, key) => {
+        out[key] = canonicalize(value[key]);
+        return out;
+      }, {});
+    }
+    return value;
+  }
+
   function stable(value) {
-    try { return JSON.stringify(value); }
+    try { return JSON.stringify(canonicalize(value)); }
     catch { return ""; }
   }
 
@@ -138,6 +149,14 @@
     return true;
   }
 
+  function reloadForRemoteState(remoteState) {
+    const signature = stable(remoteState);
+    const lastReloaded = sessionStorage.getItem("workday.cloud.lastReloaded");
+    if (!signature || signature === lastReloaded) return;
+    sessionStorage.setItem("workday.cloud.lastReloaded", signature);
+    setTimeout(() => location.reload(), 120);
+  }
+
   function startRealtimeSync(user) {
     if (unsubscribeCloud) {
       unsubscribeCloud();
@@ -146,8 +165,9 @@
     const ref = cloudApi.doc(cloudApi.db, "users", user.uid);
     unsubscribeCloud = cloudApi.onSnapshot(ref, snap => {
       if (!snap.exists() || !snap.data()?.workday) return;
-      if (applyRemoteState(snap.data().workday)) {
-        setTimeout(() => location.reload(), 120);
+      const remoteState = snap.data().workday;
+      if (applyRemoteState(remoteState)) {
+        reloadForRemoteState(remoteState);
       } else {
         setSyncStatus("Synced");
       }
@@ -164,8 +184,12 @@
     try {
       const snap = await cloudApi.getDoc(ref);
       const localState = getLocalState();
+      let remoteChangedLocal = false;
+
       if (snap.exists() && snap.data()?.workday) {
-        applyRemoteState(snap.data().workday);
+        const remoteState = snap.data().workday;
+        remoteChangedLocal = applyRemoteState(remoteState);
+        if (remoteChangedLocal) reloadForRemoteState(remoteState);
       } else if (localState) {
         await cloudApi.setDoc(ref, {
           workday: localState,
@@ -173,11 +197,9 @@
           updatedAt: cloudApi.serverTimestamp()
         }, { merge: true });
       }
+
       startRealtimeSync(user);
-      setSyncStatus("Synced");
-      if (stable(snap.data?.()?.workday || null) !== stable(localState) && snap.exists() && snap.data()?.workday) {
-        setTimeout(() => location.reload(), 120);
-      }
+      if (!remoteChangedLocal) setSyncStatus("Synced");
     } catch (error) {
       console.error("Firestore sync error", error);
       setSyncStatus(error?.code === "permission-denied" ? "Rules blocked sync" : "Sync error", "error");
