@@ -6,6 +6,21 @@
   <meta name="theme-color" content="#f7f8f4" />
   <title>Workday — Salary Tracker</title>
   <link rel="stylesheet" href="styles.css" />
+  <style>
+    .action-confirm-card{width:min(430px,calc(100vw - 32px));padding:0;overflow:hidden;text-align:left}
+    .action-confirm-top{padding:26px 26px 18px;display:flex;gap:15px;align-items:flex-start}
+    .action-confirm-icon{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;flex:none;background:var(--green-2);color:var(--green)}
+    .action-confirm-icon svg{width:23px;height:23px}
+    .action-confirm-card.danger .action-confirm-icon{background:#fae9e9;color:var(--danger)}
+    .action-confirm-card.warning .action-confirm-icon{background:#fff5db;color:#b7791f}
+    body.dark .action-confirm-card.danger .action-confirm-icon{background:#3b2323}
+    body.dark .action-confirm-card.warning .action-confirm-icon{background:#3a321f;color:#f4b942}
+    .action-confirm-copy{min-width:0;flex:1}.action-confirm-kicker{font-size:10px;font-weight:800;letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}.action-confirm-copy h3{font-size:20px;margin:0 0 7px;letter-spacing:-.02em}.action-confirm-copy p{margin:0;color:var(--muted);font-size:12px;line-height:1.65}
+    .action-confirm-details{margin:0 26px 20px;padding:12px 14px;background:var(--surface-2);border:1px solid var(--line);border-radius:12px;font-size:11px;color:var(--muted);line-height:1.5;display:none}.action-confirm-details.show{display:block}
+    .action-confirm-actions{border-top:1px solid var(--line);padding:16px 20px;display:flex;justify-content:flex-end;gap:9px;background:var(--surface-2)}
+    .action-confirm-actions .button{min-width:105px}.action-confirm-close{position:absolute;top:16px;right:16px}.action-confirm-card{position:relative}
+    @media(max-width:600px){.action-confirm-top{padding:23px 21px 16px}.action-confirm-details{margin:0 21px 18px}.action-confirm-actions{padding:14px 16px}.action-confirm-actions .button{flex:1}}
+  </style>
 </head>
 <body>
   <div class="app-shell">
@@ -27,7 +42,6 @@
         <section class="panel quick-links-card"><div class="quick-links-header"><div><span class="eyebrow">Shortcuts</span><h3>Quick links</h3></div><button class="button secondary quick-manage-btn" id="manageLinksBtn">Manage links →</button></div><div id="quickLinks" class="quick-links"></div></section>
         <section class="content-grid"><article class="panel calendar-panel"><div class="panel-head"><div><h3 id="calendarTitle">August 2026</h3><p>Colored initials show which employees worked on each day.</p></div><div class="legend"><span class="legend-dot"></span> Selected employee</div></div><div class="weekdays"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div><div class="calendar" id="calendar"></div><div class="calendar-foot"><div><span class="mini-check">✓</span> <span id="markedSummary">No workdays marked yet</span></div><button class="text-button danger" id="clearMonthBtn">Clear selected employee</button></div></article><aside class="side-column"><article class="panel profile-card"><div class="panel-head compact"><div><span class="eyebrow">Selected employee</span><h3 id="profileName">Employee</h3></div><button class="icon-button small" id="editProfileBtn" aria-label="Edit employee">✎</button></div><div class="profile-row"><span>Daily salary</span><strong id="profileRate">₱500</strong></div><div class="profile-row"><span>Current month</span><strong id="profileMonth">August 2026</strong></div><div class="progress-wrap"><div class="progress-label"><span>Month progress</span><span id="progressText">0%</span></div><div class="progress-track"><div class="progress-bar" id="progressBar"></div></div></div></article><article class="panel history-card"><div class="panel-head compact"><div><span class="eyebrow">Saved records</span><h3>Monthly history</h3></div></div><div id="historyList" class="history-list"></div></article></aside></section>
       </section>
-
       <section id="linksPage" class="links-page" hidden><div class="page-title-row"><div><span class="eyebrow">Saved shortcuts</span><h2>My links</h2><p>Create, edit, open, and delete your saved shortcuts.</p></div><button class="button secondary" id="backHomeBtn">← Back to home</button></div><section class="links-layout"><article class="panel link-form-card"><div class="panel-head compact"><div><span class="eyebrow">Shortcut</span><h3 id="linkFormTitle">New shortcut</h3></div></div><form id="linkForm" novalidate><label>Link name<input id="linkNameInput" maxlength="50" placeholder="e.g. Gmail"></label><label>Website URL<input id="linkUrlInput" type="text" inputmode="url" autocapitalize="none" placeholder="google.com or https://google.com"></label><label>Custom logo URL <span class="optional-label">Optional</span><input id="linkLogoInput" type="text" inputmode="url" autocapitalize="none" placeholder="https://example.com/logo.png"></label><p class="form-help">Leave logo empty to use the website favicon.</p><div class="link-form-actions"><button class="button secondary" type="button" id="cancelLinkEditBtn" hidden>Cancel edit</button><button class="button primary" type="submit" id="saveLinkBtn">Save link</button></div></form></article><article class="panel saved-links-card"><div class="panel-head compact"><div><span class="eyebrow">Your links</span><h3>Saved shortcuts</h3></div></div><div id="savedLinksList" class="saved-links-list"></div></article></section></section>
     </main>
   </div>
@@ -37,6 +51,19 @@
   <dialog id="employeeDialog"><form class="dialog-card" id="employeeForm"><div class="dialog-head"><div><span class="eyebrow">Team</span><h3>Add employee</h3></div><button class="icon-button" type="button" id="closeEmployeeBtn" aria-label="Close">×</button></div><label>Employee name<input id="employeeNameInput" maxlength="60" placeholder="e.g. Rose"></label><label>Daily salary rate (₱)<input id="employeeRateInput" type="number" min="0" step="1" value="500"></label><label>Calendar color<div class="color-input-row"><input id="employeeColorInput" type="color" value="#1f7a4d"><span>Used for this employee's calendar badge.</span></div></label><div class="dialog-actions"><button class="button secondary" type="button" id="cancelEmployeeBtn">Cancel</button><button class="button primary" type="submit" id="saveEmployeeBtn">Add employee</button></div></form></dialog>
 
   <dialog id="confirmDialog"><div class="dialog-card confirm-card"><div class="confirm-icon">!</div><h3>Clear attendance?</h3><p>This will clear <span id="confirmMonth"></span>. Other employees will not be affected.</p><div class="dialog-actions centered"><button class="button secondary" type="button" id="cancelClearBtn">Keep records</button><button class="button danger-fill" type="button" id="confirmClearBtn">Clear attendance</button></div></div></dialog>
+
+  <dialog id="actionConfirmDialog">
+    <div class="dialog-card action-confirm-card" id="actionConfirmCard">
+      <button class="icon-button small action-confirm-close" type="button" id="actionConfirmClose" aria-label="Close">×</button>
+      <div class="action-confirm-top">
+        <div class="action-confirm-icon" id="actionConfirmIcon"><svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 4.2 2.7 17.4A2 2 0 0 0 4.4 20h15.2a2 2 0 0 0 1.7-2.6L13.7 4.2a2 2 0 0 0-3.4 0Z"/></svg></div>
+        <div class="action-confirm-copy"><div class="action-confirm-kicker" id="actionConfirmKicker">Confirm action</div><h3 id="actionConfirmTitle">Are you sure?</h3><p id="actionConfirmMessage"></p></div>
+      </div>
+      <div class="action-confirm-details" id="actionConfirmDetails"></div>
+      <div class="action-confirm-actions"><button class="button secondary" type="button" id="actionConfirmCancel">Cancel</button><button class="button primary" type="button" id="actionConfirmAccept">Confirm</button></div>
+    </div>
+  </dialog>
+
   <div class="toast" id="toast">Saved</div>
   <script src="app.js"></script>
 </body>
