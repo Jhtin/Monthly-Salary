@@ -51,16 +51,36 @@
     btn.textContent = "Sign in";
     btn.title = "Sign in to sync data across devices";
     btn.addEventListener("click", async () => {
-      if (!cloudApi) return;
+      if (!cloudApi) {
+        setSyncStatus("Still connecting…");
+        return;
+      }
       try {
         if (currentUser) {
           await cloudApi.signOut(cloudApi.auth);
         } else {
+          setSyncStatus("Opening sign-in…");
           await cloudApi.signInWithPopup(cloudApi.auth, cloudApi.provider);
         }
       } catch (error) {
         console.error("Firebase sign-in error", error);
-        setSyncStatus("Sign-in failed", "error");
+        const code = error?.code || "";
+        if (code === "auth/popup-blocked" || code === "auth/operation-not-supported-in-this-environment" || code === "auth/cancelled-popup-request") {
+          try {
+            setSyncStatus("Redirecting to Google…");
+            await cloudApi.signInWithRedirect(cloudApi.auth, cloudApi.provider);
+            return;
+          } catch (redirectError) {
+            console.error("Firebase redirect sign-in error", redirectError);
+          }
+        }
+        if (code === "auth/unauthorized-domain") {
+          setSyncStatus("Domain not authorized", "error");
+        } else if (code !== "auth/popup-closed-by-user") {
+          setSyncStatus("Sign-in failed", "error");
+        } else {
+          setSyncStatus("Local only");
+        }
       }
     });
     actions.prepend(btn);
@@ -155,9 +175,11 @@
       const auth = authMod.getAuth(app);
       const db = firestoreMod.getFirestore(app);
       const provider = new authMod.GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
       cloudApi = {
         auth, db, provider,
         signInWithPopup: authMod.signInWithPopup,
+        signInWithRedirect: authMod.signInWithRedirect,
         signOut: authMod.signOut,
         onAuthStateChanged: authMod.onAuthStateChanged,
         doc: firestoreMod.doc,
