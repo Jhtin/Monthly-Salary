@@ -3,6 +3,7 @@ const EMPLOYEE_COLORS=["#1f7a4d","#3b82f6","#8b5cf6","#f59e0b","#ef4444","#06b6d
 const state=loadState();
 let view=new Date();
 let editingLinkIndex=null;
+let pendingConfirmAction=null;
 view.setDate(1);
 
 function loadState(){
@@ -104,38 +105,52 @@ function renderLinks(){
 function escapeHtml(value){return String(value).replace(/[&<>\"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]))}
 function escapeAttr(value){return escapeHtml(value).replace(/'/g,"&#39;")}
 function normalizeUrl(url){const trimmed=url.trim();return /^https?:\/\//i.test(trimmed)?trimmed:`https://${trimmed}`}
-function startEditLink(index){
-  const link=state.links[index];if(!link)return;editingLinkIndex=index;$("#linkNameInput").value=link.name;$("#linkUrlInput").value=link.url;$("#linkLogoInput").value=link.logo||"";$("#linkFormTitle").textContent="Edit shortcut";$("#saveLinkBtn").textContent="Update link";$("#cancelLinkEditBtn").hidden=false;$("#linkNameInput").focus();
-}
+function startEditLink(index){const link=state.links[index];if(!link)return;editingLinkIndex=index;$("#linkNameInput").value=link.name;$("#linkUrlInput").value=link.url;$("#linkLogoInput").value=link.logo||"";$("#linkFormTitle").textContent="Edit shortcut";$("#saveLinkBtn").textContent="Update link";$("#cancelLinkEditBtn").hidden=false;$("#linkNameInput").focus()}
 function cancelLinkEdit(){editingLinkIndex=null;$("#linkForm").reset();$("#linkFormTitle").textContent="New shortcut";$("#saveLinkBtn").textContent="Save link";$("#cancelLinkEditBtn").hidden=true}
-function deleteLink(index){
-  const link=state.links[index];if(!link)return;if(!confirm(`Delete "${link.name}"? This cannot be undone.`))return;state.links.splice(index,1);if(editingLinkIndex===index)cancelLinkEdit();else if(editingLinkIndex!==null&&editingLinkIndex>index)editingLinkIndex--;save();renderLinks();toast("Link deleted");
-}
 function showLinksPage(){$("#homePage").hidden=true;$("#linksPage").hidden=false;window.scrollTo({top:0,behavior:"smooth"})}
 function showHomePage(){$("#linksPage").hidden=true;$("#homePage").hidden=false;window.scrollTo({top:0,behavior:"smooth"})}
 function toast(msg){const t=$("#toast");t.textContent=msg;t.classList.add("show");clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>t.classList.remove("show"),1700)}
 function openSettings(){const emp=activeEmployee();$("#nameInput").value=emp.name;$("#rateInput").value=emp.rate;$("#editEmployeeColorInput").value=emp.color;$("#settingsDialog").showModal()}
 function openEmployeeDialog(){const nextColor=EMPLOYEE_COLORS[state.employees.length%EMPLOYEE_COLORS.length];$("#employeeForm").reset();$("#employeeRateInput").value="500";$("#employeeColorInput").value=nextColor;$("#employeeDialog").showModal()}
 function closeDialog(id){const dialog=$(id);if(dialog?.open)dialog.close()}
+
+function showActionConfirm({title,message,details="",confirmText="Confirm",cancelText="Cancel",tone="default",kicker="Confirm action",onConfirm}){
+  pendingConfirmAction=onConfirm;
+  const dialog=$("#actionConfirmDialog"),card=$("#actionConfirmCard"),detailsEl=$("#actionConfirmDetails"),accept=$("#actionConfirmAccept");
+  card.classList.remove("danger","warning");if(tone!=="default")card.classList.add(tone);
+  $("#actionConfirmKicker").textContent=kicker;$("#actionConfirmTitle").textContent=title;$("#actionConfirmMessage").textContent=message;
+  $("#actionConfirmCancel").textContent=cancelText;accept.textContent=confirmText;
+  accept.className="button "+(tone==="danger"?"danger-fill":"primary");
+  if(details){detailsEl.textContent=details;detailsEl.classList.add("show")}else{detailsEl.textContent="";detailsEl.classList.remove("show")}
+  dialog.showModal();
+}
+function closeActionConfirm(){pendingConfirmAction=null;closeDialog("#actionConfirmDialog")}
+function deleteLink(index){
+  const link=state.links[index];if(!link)return;
+  showActionConfirm({title:"Delete this shortcut?",message:`${link.name} will be removed from your saved links and homepage shortcuts.`,details:"This action cannot be undone.",confirmText:"Delete link",tone:"danger",kicker:"Delete shortcut",onConfirm:()=>{state.links.splice(index,1);if(editingLinkIndex===index)cancelLinkEdit();else if(editingLinkIndex!==null&&editingLinkIndex>index)editingLinkIndex--;save();renderLinks();toast("Link deleted")}})
+}
 function deleteActiveEmployee(){
-  const emp=activeEmployee();if(!emp)return;if(state.employees.length===1){alert("You must keep at least one employee.");return}
-  if(!confirm(`Delete ${emp.name}? All attendance records for this employee will also be removed. This cannot be undone.`))return;
-  state.employees=state.employees.filter(e=>e.id!==emp.id);Object.values(state.attendance).forEach(month=>Object.keys(month).forEach(day=>{month[day]=(month[day]||[]).filter(id=>id!==emp.id);if(!month[day].length)delete month[day]}));state.activeEmployeeId=state.employees[0].id;save();closeDialog("#settingsDialog");render();toast("Employee deleted");
+  const emp=activeEmployee();if(!emp)return;
+  if(state.employees.length===1){showActionConfirm({title:"Employee cannot be deleted",message:"The system needs at least one employee to track attendance and salary.",confirmText:"Got it",cancelText:"Close",tone:"warning",kicker:"Employee required",onConfirm:()=>{}});return}
+  showActionConfirm({title:`Delete ${emp.name}?`,message:"This employee will be permanently removed from the team.",details:"All attendance records linked to this employee will also be deleted. Other employees are not affected.",confirmText:"Delete employee",tone:"danger",kicker:"Permanent deletion",onConfirm:()=>{state.employees=state.employees.filter(e=>e.id!==emp.id);Object.values(state.attendance).forEach(month=>Object.keys(month).forEach(day=>{month[day]=(month[day]||[]).filter(id=>id!==emp.id);if(!month[day].length)delete month[day]}));state.activeEmployeeId=state.employees[0].id;save();closeDialog("#settingsDialog");render();toast("Employee deleted")}})
 }
 
 $("#settingsBtn").onclick=$("#editProfileBtn").onclick=openSettings;
-$("#settingsForm").onsubmit=e=>{e.preventDefault();const emp=activeEmployee(),name=$("#nameInput").value.trim(),rate=Number($("#rateInput").value),color=$("#editEmployeeColorInput").value;if(!name||!Number.isFinite(rate)||rate<0){alert("Enter a valid employee name and salary rate.");return}if(!confirm(`Save changes to ${emp.name}?`))return;emp.name=name;emp.rate=rate;emp.color=color;save();closeDialog("#settingsDialog");render();toast("Employee updated")};
+$("#settingsForm").onsubmit=e=>{e.preventDefault();const emp=activeEmployee(),name=$("#nameInput").value.trim(),rate=Number($("#rateInput").value),color=$("#editEmployeeColorInput").value;if(!name||!Number.isFinite(rate)||rate<0){showActionConfirm({title:"Check employee details",message:"Enter a valid employee name and salary rate before saving.",confirmText:"Review fields",cancelText:"Close",tone:"warning",kicker:"Incomplete details",onConfirm:()=>{}});return}showActionConfirm({title:"Save employee changes?",message:`Update ${emp.name} with the new information?`,details:`Name: ${name} • Daily rate: ${money(rate)}`,confirmText:"Save changes",kicker:"Update employee",onConfirm:()=>{emp.name=name;emp.rate=rate;emp.color=color;save();closeDialog("#settingsDialog");render();toast("Employee updated")}})};
 $("#deleteEmployeeBtn").onclick=deleteActiveEmployee;
 $("#closeSettingsBtn").onclick=$("#cancelSettingsBtn").onclick=()=>closeDialog("#settingsDialog");
 $("#addEmployeeBtn").onclick=openEmployeeDialog;
-$("#employeeForm").onsubmit=e=>{e.preventDefault();const name=$("#employeeNameInput").value.trim(),rate=Number($("#employeeRateInput").value),color=$("#employeeColorInput").value;if(!name||!Number.isFinite(rate)||rate<0){alert("Enter a valid employee name and salary rate.");return}const emp={id:`emp-${Date.now()}`,name,rate,color};state.employees.push(emp);state.activeEmployeeId=emp.id;save();closeDialog("#employeeDialog");render();toast(`${name} added`)};
+$("#employeeForm").onsubmit=e=>{e.preventDefault();const name=$("#employeeNameInput").value.trim(),rate=Number($("#employeeRateInput").value),color=$("#employeeColorInput").value;if(!name||!Number.isFinite(rate)||rate<0){showActionConfirm({title:"Check employee details",message:"Enter a valid employee name and salary rate before adding the employee.",confirmText:"Review fields",cancelText:"Close",tone:"warning",kicker:"Incomplete details",onConfirm:()=>{}});return}const emp={id:`emp-${Date.now()}`,name,rate,color};state.employees.push(emp);state.activeEmployeeId=emp.id;save();closeDialog("#employeeDialog");render();toast(`${name} added`)};
 $("#closeEmployeeBtn").onclick=$("#cancelEmployeeBtn").onclick=()=>closeDialog("#employeeDialog");
 $("#prevMonth").onclick=()=>{view.setMonth(view.getMonth()-1);render()};$("#nextMonth").onclick=()=>{view.setMonth(view.getMonth()+1);render()};$("#todayBtn").onclick=()=>{view=new Date();view.setDate(1);render()};$("#monthLabel").onclick=()=>{view=new Date();view.setDate(1);render()};
-$("#clearMonthBtn").onclick=()=>{const emp=activeEmployee();$("#confirmMonth").textContent=`${emp.name}'s attendance in ${monthName(view)}`;$("#confirmDialog").showModal()};
+$("#clearMonthBtn").onclick=()=>{const emp=activeEmployee();showActionConfirm({title:"Clear this month's attendance?",message:`Remove all marked workdays for ${emp.name} in ${monthName(view)}?`,details:"Other employees and other months will not be affected.",confirmText:"Clear attendance",tone:"danger",kicker:"Clear monthly records",onConfirm:()=>{const key=keyFor(view),month=state.attendance[key]||{};Object.keys(month).forEach(day=>{month[day]=(month[day]||[]).filter(id=>id!==emp.id);if(!month[day].length)delete month[day]});save();render();toast(`${emp.name}'s month cleared`)}})};
 $("#cancelClearBtn").onclick=()=>closeDialog("#confirmDialog");
-$("#confirmClearBtn").onclick=()=>{const emp=activeEmployee(),key=keyFor(view),month=state.attendance[key]||{};Object.keys(month).forEach(day=>{month[day]=(month[day]||[]).filter(id=>id!==emp.id);if(!month[day].length)delete month[day]});save();closeDialog("#confirmDialog");render();toast(`${emp.name}'s month cleared`)};
+$("#confirmClearBtn").onclick=()=>closeDialog("#confirmDialog");
 $("#exportBtn").onclick=()=>window.print();$("#themeBtn").onclick=()=>{state.theme=state.theme==="dark"?"light":"dark";save();applyTheme();toast(`${state.theme==="dark"?"Dark":"Light"} mode`)};$("#linksBtn").onclick=$("#manageLinksBtn").onclick=showLinksPage;$("#backHomeBtn").onclick=showHomePage;
 $("#cancelLinkEditBtn").onclick=cancelLinkEdit;
-$("#linkForm").onsubmit=e=>{e.preventDefault();const name=$("#linkNameInput").value.trim(),url=$("#linkUrlInput").value.trim(),logo=$("#linkLogoInput").value.trim();if(!name||!url){alert("Enter a link name and website URL.");return}const entry={name,url:normalizeUrl(url),logo};if(editingLinkIndex===null){state.links.push(entry);save();renderLinks();cancelLinkEdit();toast("Link saved")}else{const old=state.links[editingLinkIndex];if(!confirm(`Save changes to "${old.name}"?`))return;state.links[editingLinkIndex]=entry;save();renderLinks();cancelLinkEdit();toast("Link updated")}};
+$("#linkForm").onsubmit=e=>{e.preventDefault();const name=$("#linkNameInput").value.trim(),url=$("#linkUrlInput").value.trim(),logo=$("#linkLogoInput").value.trim();if(!name||!url){showActionConfirm({title:"Link details are incomplete",message:"Enter both a shortcut name and website URL.",confirmText:"Review fields",cancelText:"Close",tone:"warning",kicker:"Incomplete details",onConfirm:()=>{}});return}const entry={name,url:normalizeUrl(url),logo};if(editingLinkIndex===null){state.links.push(entry);save();renderLinks();cancelLinkEdit();toast("Link saved")}else{const old=state.links[editingLinkIndex];showActionConfirm({title:"Update this shortcut?",message:`Save the changes to ${old.name}?`,details:`New name: ${name} • URL: ${entry.url}`,confirmText:"Update link",kicker:"Update shortcut",onConfirm:()=>{state.links[editingLinkIndex]=entry;save();renderLinks();cancelLinkEdit();toast("Link updated")}})}};
+$("#actionConfirmCancel").onclick=$("#actionConfirmClose").onclick=closeActionConfirm;
+$("#actionConfirmAccept").onclick=()=>{const action=pendingConfirmAction;closeActionConfirm();if(typeof action==="function")action()};
+$("#actionConfirmDialog").addEventListener("click",e=>{if(e.target===$("#actionConfirmDialog"))closeActionConfirm()});
 function applyTheme(){document.body.classList.toggle("dark",state.theme==="dark")}
 applyTheme();render();
