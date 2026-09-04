@@ -58,17 +58,22 @@
   }
   function updateAuthUi(user){ensureAuthButton();const btn=document.getElementById("authBtn");if(!btn)return;if(user){btn.textContent=user.displayName?user.displayName.split(" ")[0]:"Signed in";btn.title=`${user.email||"Signed in"} — click to sign out`}else{btn.textContent="Sign in";btn.title="Sign in with Google to sync data across devices";setSyncStatus("Local only")}}
 
-  async function writeAndVerify(stateToSave, localTimestamp) {
+  async function writeState(stateToSave, localTimestamp) {
     const ref=cloudApi.doc(cloudApi.db,"users",currentUser.uid);
-    const signature=stable(stateToSave);
-    for(let attempt=1;attempt<=3;attempt++){
-      const writeId=`${Date.now()}-${Math.random().toString(36).slice(2)}`;lastOwnWriteId=writeId;
-      await cloudApi.setDoc(ref,{workday:stateToSave,email:currentUser.email||null,updatedAt:cloudApi.serverTimestamp(),clientUpdatedAt:localTimestamp,syncSource:sourceId,syncWriteId:writeId},{merge:true});
-      const check=await cloudApi.getDocFromServer(ref);
-      if(check.exists()&&stable(check.data()?.workday)===signature)return true;
-      console.warn(`Cloud verification mismatch (attempt ${attempt})`);
-    }
-    throw new Error("Cloud verification failed after 3 attempts");
+    const writeId=`${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    lastOwnWriteId=writeId;
+
+    // IMPORTANT: do not use { merge: true } here.
+    // Attendance removals are represented by missing nested keys. A merge can preserve
+    // those old nested Firestore fields and make removed calendar days come back.
+    await cloudApi.setDoc(ref,{
+      workday:stateToSave,
+      email:currentUser.email||null,
+      updatedAt:cloudApi.serverTimestamp(),
+      clientUpdatedAt:localTimestamp,
+      syncSource:sourceId,
+      syncWriteId:writeId
+    });
   }
 
   function saveToCloud(nextState, clientUpdatedAt){
@@ -77,7 +82,14 @@
     pendingLocalSignature=signatureToSave;
     if(!currentUser||!cloudApi){queuedBeforeAuth={state:stateToSave,updatedAt:localTimestamp};setSyncStatus("Waiting to sync…");return}
     setSyncStatus("Saving…");
-    writeChain=writeChain.then(async()=>{await writeAndVerify(stateToSave,localTimestamp);if(pendingLocalSignature===signatureToSave){pendingLocalSignature="";setSyncStatus("Synced")}}).catch(error=>{console.error("Firestore save/verify error",error);if(pendingLocalSignature===signatureToSave)pendingLocalSignature="";setSyncStatus(error?.code==="permission-denied"?"Rules blocked sync":"Sync error","error")})
+    writeChain=writeChain.then(async()=>{
+      await writeState(stateToSave,localTimestamp);
+      if(pendingLocalSignature===signatureToSave){pendingLocalSignature="";setSyncStatus("Synced")}
+    }).catch(error=>{
+      console.error("Firestore save error",error);
+      if(pendingLocalSignature===signatureToSave)pendingLocalSignature="";
+      setSyncStatus(error?.code==="permission-denied"?"Rules blocked sync":"Sync error","error")
+    })
   }
 
   Storage.prototype.setItem=function(key,value){
@@ -105,7 +117,7 @@
     if(!cloudApi||!user)return;const ref=cloudApi.doc(cloudApi.db,"users",user.uid);setSyncStatus("Syncing…");
     try{
       if(queuedBeforeAuth){const queued=queuedBeforeAuth;queuedBeforeAuth=null;saveToCloud(queued.state,queued.updatedAt)}
-      const snap=await cloudApi.getDocFromServer(ref),localState=getLocalState(),localUpdatedAt=getLocalUpdatedAt();
+      const snap=await cloudApi.getDoc(ref),localState=getLocalState(),localUpdatedAt=getLocalUpdatedAt();
       if(snap.exists()&&snap.data()?.workday){const data=snap.data(),remoteState=data.workday,remoteUpdatedAt=Number(data.clientUpdatedAt||0)||0;
         if(localState&&localUpdatedAt>remoteUpdatedAt&&stable(localState)!==stable(remoteState))saveToCloud(localState,localUpdatedAt);else if(!pendingLocalSignature)applyRemoteState(remoteState,remoteUpdatedAt)
       }else if(localState){const updatedAt=localUpdatedAt||markLocalUpdated();saveToCloud(localState,updatedAt)}
@@ -118,7 +130,7 @@
     try{
       const [appMod,authMod,firestoreMod]=await Promise.all([import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-app.js`),import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-auth.js`),import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-firestore.js`)]);
       const app=appMod.initializeApp(firebaseConfig),auth=authMod.getAuth(app);await authMod.setPersistence(auth,authMod.browserLocalPersistence);const db=firestoreMod.getFirestore(app),provider=new authMod.GoogleAuthProvider();provider.setCustomParameters({prompt:"select_account"});
-      cloudApi={auth,db,provider,signInWithPopup:authMod.signInWithPopup,signInWithRedirect:authMod.signInWithRedirect,getRedirectResult:authMod.getRedirectResult,signOut:authMod.signOut,onAuthStateChanged:authMod.onAuthStateChanged,doc:firestoreMod.doc,getDoc:firestoreMod.getDoc,getDocFromServer:firestoreMod.getDocFromServer,setDoc:firestoreMod.setDoc,onSnapshot:firestoreMod.onSnapshot,serverTimestamp:firestoreMod.serverTimestamp};
+      cloudApi={auth,db,provider,signInWithPopup:authMod.signInWithPopup,signInWithRedirect:authMod.signInWithRedirect,getRedirectResult:authMod.getRedirectResult,signOut:authMod.signOut,onAuthStateChanged:authMod.onAuthStateChanged,doc:firestoreMod.doc,getDoc:firestoreMod.getDoc,setDoc:firestoreMod.setDoc,onSnapshot:firestoreMod.onSnapshot,serverTimestamp:firestoreMod.serverTimestamp};
       try{await cloudApi.getRedirectResult(auth)}catch(error){console.error("Firebase redirect result error",error)}
       cloudApi.onAuthStateChanged(auth,async user=>{currentUser=user;updateAuthUi(user);if(user)await syncAfterLogin(user);else{pendingLocalSignature="";lastOwnWriteId="";if(unsubscribeCloud){unsubscribeCloud();unsubscribeCloud=null}}})
     }catch(error){console.error("Firebase initialization error",error);setSyncStatus("Offline","error")}
