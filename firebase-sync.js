@@ -12,6 +12,9 @@
   };
 
   const originalSetItem = Storage.prototype.setItem;
+  const sourceId = sessionStorage.getItem("workday.sync.source") || (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
+  sessionStorage.setItem("workday.sync.source", sourceId);
+
   let currentUser = null;
   let cloudApi = null;
   let syncingFromCloud = false;
@@ -20,6 +23,8 @@
   let pendingRemoteState = null;
   let pendingLocalSignature = "";
   let pendingLocalState = null;
+  let lastOwnWriteId = "";
+  let localWriteLockUntil = 0;
 
   function getLocalState() {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); }
@@ -140,25 +145,34 @@
   async function saveToCloud(nextState) {
     if (!currentUser || !cloudApi || syncingFromCloud || !nextState) return;
     clearTimeout(saveTimer);
-    pendingLocalState = nextState;
-    pendingLocalSignature = stable(nextState);
+    pendingLocalState = JSON.parse(JSON.stringify(nextState));
+    pendingLocalSignature = stable(pendingLocalState);
+    localWriteLockUntil = Date.now() + 1800;
     setSyncStatus("Saving…");
 
     saveTimer = setTimeout(async () => {
       const stateToSave = pendingLocalState;
       const signatureToSave = stable(stateToSave);
+      const writeId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      lastOwnWriteId = writeId;
       try {
         const ref = cloudApi.doc(cloudApi.db, "users", currentUser.uid);
         await cloudApi.setDoc(ref, {
           workday: stateToSave,
           email: currentUser.email || null,
-          updatedAt: cloudApi.serverTimestamp()
+          updatedAt: cloudApi.serverTimestamp(),
+          syncSource: sourceId,
+          syncWriteId: writeId
         }, { merge: true });
 
         if (pendingLocalSignature === signatureToSave) {
-          pendingLocalSignature = "";
-          pendingLocalState = null;
-          setSyncStatus("Synced");
+          setTimeout(() => {
+            if (pendingLocalSignature === signatureToSave) {
+              pendingLocalSignature = "";
+              pendingLocalState = null;
+              setSyncStatus("Synced");
+            }
+          }, 500);
         }
       } catch (error) {
         console.error("Firestore save error", error);
@@ -174,12 +188,7 @@
   Storage.prototype.setItem = function(key, value) {
     originalSetItem.call(this, key, value);
     if (this === localStorage && key === STORAGE_KEY && !syncingFromCloud) {
-      try {
-        const nextState = JSON.parse(value);
-        pendingLocalState = nextState;
-        pendingLocalSignature = stable(nextState);
-        saveToCloud(nextState);
-      } catch {}
+      try { saveToCloud(JSON.parse(value)); } catch {}
     }
   };
 
@@ -209,20 +218,22 @@
     const ref = cloudApi.doc(cloudApi.db, "users", user.uid);
     unsubscribeCloud = cloudApi.onSnapshot(ref, snap => {
       if (!snap.exists() || !snap.data()?.workday) return;
-      const remoteState = snap.data().workday;
+      const data = snap.data();
+      const remoteState = data.workday;
       const remoteSignature = stable(remoteState);
 
-      // Never let an older cloud snapshot overwrite a click that is still being saved.
-      if (pendingLocalSignature) {
-        if (remoteSignature === pendingLocalSignature) {
-          if (!snap.metadata?.hasPendingWrites) {
-            pendingLocalSignature = "";
-            pendingLocalState = null;
-            setSyncStatus("Synced");
-          }
+      // Ignore this tab's own Firestore echo completely.
+      if (data.syncSource === sourceId || data.syncWriteId === lastOwnWriteId) {
+        if (!snap.metadata?.hasPendingWrites && remoteSignature === pendingLocalSignature) {
+          pendingLocalSignature = "";
+          pendingLocalState = null;
+          setSyncStatus("Synced");
         }
         return;
       }
+
+      // While a local click is being committed, never allow another snapshot to put it back.
+      if (pendingLocalSignature || Date.now() < localWriteLockUntil) return;
 
       if (!applyRemoteState(remoteState)) setSyncStatus("Synced");
     }, error => {
@@ -242,10 +253,14 @@
       if (snap.exists() && snap.data()?.workday) {
         applyRemoteState(snap.data().workday);
       } else if (localState) {
+        const writeId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        lastOwnWriteId = writeId;
         await cloudApi.setDoc(ref, {
           workday: localState,
           email: user.email || null,
-          updatedAt: cloudApi.serverTimestamp()
+          updatedAt: cloudApi.serverTimestamp(),
+          syncSource: sourceId,
+          syncWriteId: writeId
         }, { merge: true });
       }
 
@@ -298,6 +313,8 @@
         } else {
           pendingLocalSignature = "";
           pendingLocalState = null;
+          lastOwnWriteId = "";
+          localWriteLockUntil = 0;
           if (unsubscribeCloud) {
             unsubscribeCloud();
             unsubscribeCloud = null;
