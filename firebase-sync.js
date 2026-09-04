@@ -113,15 +113,15 @@
     }
   }
 
-  async function saveToCloud(state) {
-    if (!currentUser || !cloudApi || syncingFromCloud || !state) return;
+  async function saveToCloud(nextState) {
+    if (!currentUser || !cloudApi || syncingFromCloud || !nextState) return;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(async () => {
       try {
         setSyncStatus("Saving…");
         const ref = cloudApi.doc(cloudApi.db, "users", currentUser.uid);
         await cloudApi.setDoc(ref, {
-          workday: state,
+          workday: nextState,
           email: currentUser.email || null,
           updatedAt: cloudApi.serverTimestamp()
         }, { merge: true });
@@ -130,7 +130,7 @@
         console.error("Firestore save error", error);
         setSyncStatus(error?.code === "permission-denied" ? "Rules blocked sync" : "Sync error", "error");
       }
-    }, 250);
+    }, 80);
   }
 
   Storage.prototype.setItem = function(key, value) {
@@ -140,21 +140,28 @@
     }
   };
 
+  function updateRunningApp(remoteState) {
+    try {
+      if (typeof state !== "object" || !state || typeof render !== "function") return false;
+      const copy = JSON.parse(JSON.stringify(remoteState));
+      Object.keys(state).forEach(key => delete state[key]);
+      Object.assign(state, copy);
+      render();
+      return true;
+    } catch (error) {
+      console.error("Live UI update error", error);
+      return false;
+    }
+  }
+
   function applyRemoteState(remoteState) {
     if (!remoteState || stable(remoteState) === stable(getLocalState())) return false;
     syncingFromCloud = true;
     originalSetItem.call(localStorage, STORAGE_KEY, JSON.stringify(remoteState));
+    updateRunningApp(remoteState);
     syncingFromCloud = false;
     setSyncStatus("Updated from cloud");
     return true;
-  }
-
-  function reloadForRemoteState(remoteState) {
-    const signature = stable(remoteState);
-    const lastReloaded = sessionStorage.getItem("workday.cloud.lastReloaded");
-    if (!signature || signature === lastReloaded) return;
-    sessionStorage.setItem("workday.cloud.lastReloaded", signature);
-    setTimeout(() => location.reload(), 120);
   }
 
   function startRealtimeSync(user) {
@@ -166,11 +173,7 @@
     unsubscribeCloud = cloudApi.onSnapshot(ref, snap => {
       if (!snap.exists() || !snap.data()?.workday) return;
       const remoteState = snap.data().workday;
-      if (applyRemoteState(remoteState)) {
-        reloadForRemoteState(remoteState);
-      } else {
-        setSyncStatus("Synced");
-      }
+      if (!applyRemoteState(remoteState)) setSyncStatus("Synced");
     }, error => {
       console.error("Firestore realtime sync error", error);
       setSyncStatus(error?.code === "permission-denied" ? "Rules blocked sync" : "Sync error", "error");
@@ -184,12 +187,9 @@
     try {
       const snap = await cloudApi.getDoc(ref);
       const localState = getLocalState();
-      let remoteChangedLocal = false;
 
       if (snap.exists() && snap.data()?.workday) {
-        const remoteState = snap.data().workday;
-        remoteChangedLocal = applyRemoteState(remoteState);
-        if (remoteChangedLocal) reloadForRemoteState(remoteState);
+        applyRemoteState(snap.data().workday);
       } else if (localState) {
         await cloudApi.setDoc(ref, {
           workday: localState,
@@ -199,7 +199,7 @@
       }
 
       startRealtimeSync(user);
-      if (!remoteChangedLocal) setSyncStatus("Synced");
+      setSyncStatus("Synced");
     } catch (error) {
       console.error("Firestore sync error", error);
       setSyncStatus(error?.code === "permission-denied" ? "Rules blocked sync" : "Sync error", "error");
