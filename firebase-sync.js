@@ -16,6 +16,7 @@
   let cloudApi = null;
   let syncingFromCloud = false;
   let saveTimer = null;
+  let unsubscribeCloud = null;
 
   function getLocalState() {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); }
@@ -38,6 +39,7 @@
     if (el) {
       el.textContent = text;
       el.dataset.tone = tone;
+      el.title = tone === "error" ? "Open the browser console for Firebase details" : "Firebase cloud sync status";
     }
   }
 
@@ -115,9 +117,9 @@
         setSyncStatus("Synced");
       } catch (error) {
         console.error("Firestore save error", error);
-        setSyncStatus("Sync error", "error");
+        setSyncStatus(error?.code === "permission-denied" ? "Rules blocked sync" : "Sync error", "error");
       }
-    }, 350);
+    }, 250);
   }
 
   Storage.prototype.setItem = function(key, value) {
@@ -127,6 +129,34 @@
     }
   };
 
+  function applyRemoteState(remoteState) {
+    if (!remoteState || stable(remoteState) === stable(getLocalState())) return false;
+    syncingFromCloud = true;
+    originalSetItem.call(localStorage, STORAGE_KEY, JSON.stringify(remoteState));
+    syncingFromCloud = false;
+    setSyncStatus("Updated from cloud");
+    return true;
+  }
+
+  function startRealtimeSync(user) {
+    if (unsubscribeCloud) {
+      unsubscribeCloud();
+      unsubscribeCloud = null;
+    }
+    const ref = cloudApi.doc(cloudApi.db, "users", user.uid);
+    unsubscribeCloud = cloudApi.onSnapshot(ref, snap => {
+      if (!snap.exists() || !snap.data()?.workday) return;
+      if (applyRemoteState(snap.data().workday)) {
+        setTimeout(() => location.reload(), 120);
+      } else {
+        setSyncStatus("Synced");
+      }
+    }, error => {
+      console.error("Firestore realtime sync error", error);
+      setSyncStatus(error?.code === "permission-denied" ? "Rules blocked sync" : "Sync error", "error");
+    });
+  }
+
   async function syncAfterLogin(user) {
     if (!cloudApi || !user) return;
     const ref = cloudApi.doc(cloudApi.db, "users", user.uid);
@@ -135,18 +165,7 @@
       const snap = await cloudApi.getDoc(ref);
       const localState = getLocalState();
       if (snap.exists() && snap.data()?.workday) {
-        const remoteState = snap.data().workday;
-        if (stable(remoteState) !== stable(localState)) {
-          syncingFromCloud = true;
-          originalSetItem.call(localStorage, STORAGE_KEY, JSON.stringify(remoteState));
-          syncingFromCloud = false;
-          setSyncStatus("Synced");
-          if (sessionStorage.getItem("workday.cloud.reload") !== "1") {
-            sessionStorage.setItem("workday.cloud.reload", "1");
-            location.reload();
-            return;
-          }
-        }
+        applyRemoteState(snap.data().workday);
       } else if (localState) {
         await cloudApi.setDoc(ref, {
           workday: localState,
@@ -154,11 +173,14 @@
           updatedAt: cloudApi.serverTimestamp()
         }, { merge: true });
       }
-      sessionStorage.removeItem("workday.cloud.reload");
+      startRealtimeSync(user);
       setSyncStatus("Synced");
+      if (stable(snap.data?.()?.workday || null) !== stable(localState) && snap.exists() && snap.data()?.workday) {
+        setTimeout(() => location.reload(), 120);
+      }
     } catch (error) {
       console.error("Firestore sync error", error);
-      setSyncStatus("Sync error", "error");
+      setSyncStatus(error?.code === "permission-denied" ? "Rules blocked sync" : "Sync error", "error");
     }
   }
 
@@ -173,6 +195,7 @@
       ]);
       const app = appMod.initializeApp(firebaseConfig);
       const auth = authMod.getAuth(app);
+      await authMod.setPersistence(auth, authMod.browserLocalPersistence);
       const db = firestoreMod.getFirestore(app);
       const provider = new authMod.GoogleAuthProvider();
       provider.setCustomParameters({ prompt: "select_account" });
@@ -180,17 +203,28 @@
         auth, db, provider,
         signInWithPopup: authMod.signInWithPopup,
         signInWithRedirect: authMod.signInWithRedirect,
+        getRedirectResult: authMod.getRedirectResult,
         signOut: authMod.signOut,
         onAuthStateChanged: authMod.onAuthStateChanged,
         doc: firestoreMod.doc,
         getDoc: firestoreMod.getDoc,
         setDoc: firestoreMod.setDoc,
+        onSnapshot: firestoreMod.onSnapshot,
         serverTimestamp: firestoreMod.serverTimestamp
       };
+
+      try { await cloudApi.getRedirectResult(auth); }
+      catch (error) { console.error("Firebase redirect result error", error); }
+
       cloudApi.onAuthStateChanged(auth, async user => {
         currentUser = user;
         updateAuthUi(user);
-        if (user) await syncAfterLogin(user);
+        if (user) {
+          await syncAfterLogin(user);
+        } else if (unsubscribeCloud) {
+          unsubscribeCloud();
+          unsubscribeCloud = null;
+        }
       });
     } catch (error) {
       console.error("Firebase initialization error", error);
