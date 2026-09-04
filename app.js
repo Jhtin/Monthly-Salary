@@ -179,11 +179,11 @@ function deleteLink(index){state.links.splice(index,1);save();renderLinks();toas
 function showLinksPage(){$("#homePage").hidden=true;$("#linksPage").hidden=false;window.scrollTo({top:0,behavior:"smooth"})}
 function showHomePage(){$("#linksPage").hidden=true;$("#homePage").hidden=false;window.scrollTo({top:0,behavior:"smooth"})}
 function toast(msg){const t=$("#toast");t.textContent=msg;t.classList.add("show");clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>t.classList.remove("show"),1700)}
-function openSettings(){const emp=activeEmployee();$("#nameInput").value=emp.name;$("#rateInput").value=emp.rate;$("#settingsDialog").showModal()}
+function openSettings(){const emp=activeEmployee();$("#nameInput").value=emp.name;$("#rateInput").value=emp.rate;$("#editEmployeeColorInput").value=emp.color;$("#settingsDialog").showModal()}
 function openEmployeeDialog(){const nextColor=EMPLOYEE_COLORS[state.employees.length%EMPLOYEE_COLORS.length];$("#employeeNameInput").value="";$("#employeeRateInput").value="500";$("#employeeColorInput").value=nextColor;$("#employeeDialog").showModal()}
 
 $("#settingsBtn").onclick=$("#editProfileBtn").onclick=openSettings;
-$("#saveSettingsBtn").onclick=e=>{e.preventDefault();const emp=activeEmployee(),name=$("#nameInput").value.trim(),rate=Number($("#rateInput").value);if(!name||rate<0)return;emp.name=name;emp.rate=rate;save();$("#settingsDialog").close();render();toast("Employee updated")};
+$("#saveSettingsBtn").onclick=e=>{e.preventDefault();const emp=activeEmployee(),name=$("#nameInput").value.trim(),rate=Number($("#rateInput").value),color=$("#editEmployeeColorInput").value;if(!name||rate<0)return;emp.name=name;emp.rate=rate;emp.color=color;save();$("#settingsDialog").close();render();toast("Employee updated")};
 $("#addEmployeeBtn").onclick=openEmployeeDialog;
 $("#saveEmployeeBtn").onclick=e=>{e.preventDefault();const name=$("#employeeNameInput").value.trim(),rate=Number($("#employeeRateInput").value),color=$("#employeeColorInput").value;if(!name||rate<0)return;const emp={id:`emp-${Date.now()}`,name,rate,color};state.employees.push(emp);state.activeEmployeeId=emp.id;save();$("#employeeDialog").close();render();toast(`${name} added`)};
 $("#prevMonth").onclick=()=>{view.setMonth(view.getMonth()-1);render()};
