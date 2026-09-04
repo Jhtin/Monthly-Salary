@@ -1,5 +1,6 @@
 (() => {
   const STORAGE_KEY = "workday.salary.tracker.v1";
+  const LOCAL_UPDATED_KEY = "workday.salary.tracker.updatedAt";
   const FIREBASE_VERSION = "12.18.0";
   const firebaseConfig = {
     apiKey: "AIzaSyAsT2xjwwctgZA7SLxGPUCekbgZcRBp9co",
@@ -18,17 +19,25 @@
   let currentUser = null;
   let cloudApi = null;
   let syncingFromCloud = false;
-  let saveTimer = null;
   let unsubscribeCloud = null;
   let pendingRemoteState = null;
   let pendingLocalSignature = "";
-  let pendingLocalState = null;
   let lastOwnWriteId = "";
-  let localWriteLockUntil = 0;
+  let writeChain = Promise.resolve();
 
   function getLocalState() {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); }
     catch { return null; }
+  }
+
+  function getLocalUpdatedAt() {
+    return Number(localStorage.getItem(LOCAL_UPDATED_KEY) || 0) || 0;
+  }
+
+  function markLocalUpdated() {
+    const now = Date.now();
+    originalSetItem.call(localStorage, LOCAL_UPDATED_KEY, String(now));
+    return now;
   }
 
   function canonicalize(value) {
@@ -116,13 +125,9 @@
             console.error("Firebase redirect sign-in error", redirectError);
           }
         }
-        if (code === "auth/unauthorized-domain") {
-          setSyncStatus("Domain not authorized", "error");
-        } else if (code !== "auth/popup-closed-by-user") {
-          setSyncStatus("Sign-in failed", "error");
-        } else {
-          setSyncStatus("Local only");
-        }
+        if (code === "auth/unauthorized-domain") setSyncStatus("Domain not authorized", "error");
+        else if (code !== "auth/popup-closed-by-user") setSyncStatus("Sign-in failed", "error");
+        else setSyncStatus("Local only");
       }
     });
     actions.prepend(btn);
@@ -142,100 +147,95 @@
     }
   }
 
-  async function saveToCloud(nextState) {
+  function saveToCloud(nextState, clientUpdatedAt) {
     if (!currentUser || !cloudApi || syncingFromCloud || !nextState) return;
-    clearTimeout(saveTimer);
-    pendingLocalState = JSON.parse(JSON.stringify(nextState));
-    pendingLocalSignature = stable(pendingLocalState);
-    localWriteLockUntil = Date.now() + 1800;
+    const stateToSave = JSON.parse(JSON.stringify(nextState));
+    const signatureToSave = stable(stateToSave);
+    const localTimestamp = clientUpdatedAt || getLocalUpdatedAt() || Date.now();
+    pendingLocalSignature = signatureToSave;
     setSyncStatus("Saving…");
 
-    saveTimer = setTimeout(async () => {
-      const stateToSave = pendingLocalState;
-      const signatureToSave = stable(stateToSave);
+    writeChain = writeChain.then(async () => {
       const writeId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
       lastOwnWriteId = writeId;
-      try {
-        const ref = cloudApi.doc(cloudApi.db, "users", currentUser.uid);
-        await cloudApi.setDoc(ref, {
-          workday: stateToSave,
-          email: currentUser.email || null,
-          updatedAt: cloudApi.serverTimestamp(),
-          syncSource: sourceId,
-          syncWriteId: writeId
-        }, { merge: true });
+      const ref = cloudApi.doc(cloudApi.db, "users", currentUser.uid);
+      await cloudApi.setDoc(ref, {
+        workday: stateToSave,
+        email: currentUser.email || null,
+        updatedAt: cloudApi.serverTimestamp(),
+        clientUpdatedAt: localTimestamp,
+        syncSource: sourceId,
+        syncWriteId: writeId
+      }, { merge: true });
 
-        if (pendingLocalSignature === signatureToSave) {
-          setTimeout(() => {
-            if (pendingLocalSignature === signatureToSave) {
-              pendingLocalSignature = "";
-              pendingLocalState = null;
-              setSyncStatus("Synced");
-            }
-          }, 500);
-        }
-      } catch (error) {
-        console.error("Firestore save error", error);
-        if (pendingLocalSignature === signatureToSave) {
-          pendingLocalSignature = "";
-          pendingLocalState = null;
-        }
-        setSyncStatus(error?.code === "permission-denied" ? "Rules blocked sync" : "Sync error", "error");
+      if (pendingLocalSignature === signatureToSave) {
+        pendingLocalSignature = "";
+        setSyncStatus("Synced");
       }
-    }, 80);
+    }).catch(error => {
+      console.error("Firestore save error", error);
+      if (pendingLocalSignature === signatureToSave) pendingLocalSignature = "";
+      setSyncStatus(error?.code === "permission-denied" ? "Rules blocked sync" : "Sync error", "error");
+    });
   }
 
   Storage.prototype.setItem = function(key, value) {
     originalSetItem.call(this, key, value);
     if (this === localStorage && key === STORAGE_KEY && !syncingFromCloud) {
-      try { saveToCloud(JSON.parse(value)); } catch {}
+      try {
+        const updatedAt = markLocalUpdated();
+        saveToCloud(JSON.parse(value), updatedAt);
+      } catch {}
     }
   };
 
-  function applyRemoteState(remoteState) {
-    if (!remoteState || stable(remoteState) === stable(getLocalState())) return false;
+  function applyRemoteState(remoteState, remoteUpdatedAt = 0) {
+    if (!remoteState || stable(remoteState) === stable(getLocalState())) {
+      if (remoteUpdatedAt > getLocalUpdatedAt()) originalSetItem.call(localStorage, LOCAL_UPDATED_KEY, String(remoteUpdatedAt));
+      return false;
+    }
 
     syncingFromCloud = true;
     originalSetItem.call(localStorage, STORAGE_KEY, JSON.stringify(remoteState));
+    originalSetItem.call(localStorage, LOCAL_UPDATED_KEY, String(remoteUpdatedAt || Date.now()));
     syncingFromCloud = false;
 
     pendingRemoteState = remoteState;
-    if (typeof window.workdayApplyCloudState === "function") {
-      applyPendingRemoteState();
-    } else {
-      ensureLiveUpdateBridge();
-    }
+    if (typeof window.workdayApplyCloudState === "function") applyPendingRemoteState();
+    else ensureLiveUpdateBridge();
 
     setSyncStatus("Updated from cloud");
     return true;
   }
 
   function startRealtimeSync(user) {
-    if (unsubscribeCloud) {
-      unsubscribeCloud();
-      unsubscribeCloud = null;
-    }
+    if (unsubscribeCloud) unsubscribeCloud();
     const ref = cloudApi.doc(cloudApi.db, "users", user.uid);
     unsubscribeCloud = cloudApi.onSnapshot(ref, snap => {
       if (!snap.exists() || !snap.data()?.workday) return;
       const data = snap.data();
       const remoteState = data.workday;
       const remoteSignature = stable(remoteState);
+      const remoteUpdatedAt = Number(data.clientUpdatedAt || 0) || 0;
+      const localUpdatedAt = getLocalUpdatedAt();
 
-      // Ignore this tab's own Firestore echo completely.
       if (data.syncSource === sourceId || data.syncWriteId === lastOwnWriteId) {
         if (!snap.metadata?.hasPendingWrites && remoteSignature === pendingLocalSignature) {
           pendingLocalSignature = "";
-          pendingLocalState = null;
           setSyncStatus("Synced");
         }
         return;
       }
 
-      // While a local click is being committed, never allow another snapshot to put it back.
-      if (pendingLocalSignature || Date.now() < localWriteLockUntil) return;
+      if (pendingLocalSignature) return;
 
-      if (!applyRemoteState(remoteState)) setSyncStatus("Synced");
+      // A newer local change always wins. This prevents a removed day from returning after refresh.
+      if (localUpdatedAt > remoteUpdatedAt && stable(getLocalState()) !== remoteSignature) {
+        saveToCloud(getLocalState(), localUpdatedAt);
+        return;
+      }
+
+      if (!applyRemoteState(remoteState, remoteUpdatedAt)) setSyncStatus("Synced");
     }, error => {
       console.error("Firestore realtime sync error", error);
       setSyncStatus(error?.code === "permission-denied" ? "Rules blocked sync" : "Sync error", "error");
@@ -249,23 +249,25 @@
     try {
       const snap = await cloudApi.getDoc(ref);
       const localState = getLocalState();
+      const localUpdatedAt = getLocalUpdatedAt();
 
       if (snap.exists() && snap.data()?.workday) {
-        applyRemoteState(snap.data().workday);
+        const data = snap.data();
+        const remoteState = data.workday;
+        const remoteUpdatedAt = Number(data.clientUpdatedAt || 0) || 0;
+
+        if (localState && localUpdatedAt > remoteUpdatedAt && stable(localState) !== stable(remoteState)) {
+          saveToCloud(localState, localUpdatedAt);
+        } else {
+          applyRemoteState(remoteState, remoteUpdatedAt);
+        }
       } else if (localState) {
-        const writeId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        lastOwnWriteId = writeId;
-        await cloudApi.setDoc(ref, {
-          workday: localState,
-          email: user.email || null,
-          updatedAt: cloudApi.serverTimestamp(),
-          syncSource: sourceId,
-          syncWriteId: writeId
-        }, { merge: true });
+        const updatedAt = localUpdatedAt || markLocalUpdated();
+        saveToCloud(localState, updatedAt);
       }
 
       startRealtimeSync(user);
-      setSyncStatus("Synced");
+      if (!pendingLocalSignature) setSyncStatus("Synced");
     } catch (error) {
       console.error("Firestore sync error", error);
       setSyncStatus(error?.code === "permission-denied" ? "Rules blocked sync" : "Sync error", "error");
@@ -308,13 +310,10 @@
       cloudApi.onAuthStateChanged(auth, async user => {
         currentUser = user;
         updateAuthUi(user);
-        if (user) {
-          await syncAfterLogin(user);
-        } else {
+        if (user) await syncAfterLogin(user);
+        else {
           pendingLocalSignature = "";
-          pendingLocalState = null;
           lastOwnWriteId = "";
-          localWriteLockUntil = 0;
           if (unsubscribeCloud) {
             unsubscribeCloud();
             unsubscribeCloud = null;
