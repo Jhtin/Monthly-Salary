@@ -20,7 +20,23 @@
     .action-confirm-actions{border-top:1px solid var(--line);padding:16px 20px;display:flex;justify-content:flex-end;gap:9px;background:var(--surface-2)}
     .action-confirm-actions .button{min-width:105px}.action-confirm-close{position:absolute;top:16px;right:16px}.action-confirm-card{position:relative}
     .topbar .header-actions{gap:8px}.topbar .header-actions .button{min-width:104px}.topbar .header-actions .icon-button{flex:none}
+    .mobile-menu-toggle{display:none}.mobile-action-label{display:none}
+    @media(max-width:700px){
+      .topbar{position:sticky;top:0;z-index:50;min-height:68px!important;height:auto!important;padding:10px 0!important;display:flex!important;flex-direction:row!important;align-items:center!important;gap:12px!important;overflow:visible}
+      .brand{width:auto!important;flex:1;min-width:0}.brand p{display:block!important}
+      .mobile-menu-toggle{display:grid!important;flex:none;width:42px!important;height:42px!important;border-radius:13px;position:relative;z-index:52}
+      .topbar .header-actions{display:none!important;position:absolute;top:calc(100% - 4px);right:0;width:min(310px,calc(100vw - 24px));max-width:none!important;padding:10px;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:0 20px 55px rgba(18,27,21,.18);z-index:51;flex-direction:column!important;align-items:stretch!important;gap:7px!important}
+      .topbar .header-actions.mobile-open{display:flex!important}
+      .topbar .header-actions .button,.topbar .header-actions .icon-button{display:flex!important;width:100%!important;min-width:0!important;height:44px!important;padding:0 13px!important;border-radius:11px;justify-content:flex-start!important;font-size:12px!important;font-weight:750}
+      .topbar .header-actions .icon-button svg,.topbar .header-actions .button svg{display:block!important;width:18px;height:18px;flex:none}
+      .topbar .header-actions #themeBtn{gap:9px}
+      .mobile-action-label{display:inline!important;font-size:12px}
+      .topbar .header-actions #cloudStatus{display:block!important;width:100%;padding:8px 9px 2px!important;text-align:left!important;justify-self:auto!important;order:10!important;border-top:1px solid var(--line);margin-top:2px;white-space:normal!important;overflow:visible!important;font-size:9px!important}
+      .topbar .header-actions #authBtn{order:1}.topbar .header-actions #exportBtn{order:2}.topbar .header-actions #themeBtn{order:3}
+      body.dark .topbar .header-actions{box-shadow:0 20px 55px rgba(0,0,0,.34)}
+    }
     @media(max-width:600px){.action-confirm-top{padding:23px 21px 16px}.action-confirm-details{margin:0 21px 18px}.action-confirm-actions{padding:14px 16px}.action-confirm-actions .button{flex:1}.topbar .header-actions .button{min-width:auto}}
+    @media(max-width:380px){.brand p{display:none!important}.topbar .header-actions{width:calc(100vw - 24px)}}
   </style>
 </head>
 <body>
