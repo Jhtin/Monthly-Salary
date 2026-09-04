@@ -4,7 +4,7 @@ let view=new Date();
 view.setDate(1);
 
 function loadState(){
-  const fallback={name:"Employee",rate:500,records:{},theme:"light"};
+  const fallback={name:"Employee",rate:500,records:{},theme:"light",links:[]};
   try{return {...fallback,...JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}")};}catch{return fallback}
 }
 function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state))}
@@ -31,6 +31,7 @@ function render(){
   $("#markedSummary").textContent=days.length?`${days.length} workday${days.length===1?"":"s"} marked for ${title}`:"No workdays marked yet";
   renderCalendar(days);
   renderHistory();
+  renderLinks();
   const total=new Date(view.getFullYear(),view.getMonth()+1,0).getDate();
   const pct=Math.round(days.length/total*100);
   $("#progressText").textContent=pct+"%";
@@ -65,6 +66,53 @@ function renderHistory(){
     list.appendChild(item)
   })
 }
+function renderLinks(){
+  const quick=$("#quickLinks"),list=$("#savedLinksList");
+  if(!quick||!list)return;
+  quick.innerHTML="";list.innerHTML="";
+  const links=Array.isArray(state.links)?state.links:[];
+  if(!links.length){
+    quick.innerHTML='<div class="empty-links">No shortcuts yet. Add your first link.</div>';
+    list.innerHTML='<div class="empty-links">No saved links yet.</div>';
+    return;
+  }
+  links.forEach((link,index)=>{
+    const a=document.createElement("a");
+    a.className="quick-link";
+    a.href=link.url;
+    a.target="_blank";
+    a.rel="noopener noreferrer";
+    a.innerHTML=`<span class="quick-link-icon">↗</span><span>${escapeHtml(link.name)}</span>`;
+    quick.appendChild(a);
+
+    const item=document.createElement("div");
+    item.className="saved-link-item";
+    item.innerHTML=`<div class="saved-link-main"><strong>${escapeHtml(link.name)}</strong><span>${escapeHtml(link.url)}</span></div><div class="saved-link-actions"><a class="icon-button small" href="${escapeAttr(link.url)}" target="_blank" rel="noopener noreferrer" aria-label="Open ${escapeAttr(link.name)}">↗</a><button class="icon-button small danger-link" data-index="${index}" aria-label="Delete ${escapeAttr(link.name)}">×</button></div>`;
+    list.appendChild(item);
+  });
+  list.querySelectorAll(".danger-link").forEach(btn=>btn.onclick=()=>deleteLink(Number(btn.dataset.index)));
+}
+function escapeHtml(value){return String(value).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]))}
+function escapeAttr(value){return escapeHtml(value).replace(/'/g,"&#39;")}
+function normalizeUrl(url){
+  const trimmed=url.trim();
+  if(!/^https?:\/\//i.test(trimmed))return `https://${trimmed}`;
+  return trimmed;
+}
+function addLink(name,url){
+  state.links=Array.isArray(state.links)?state.links:[];
+  state.links.push({name:name.trim(),url:normalizeUrl(url)});
+  save();renderLinks();toast("Link saved");
+}
+function deleteLink(index){
+  state.links.splice(index,1);save();renderLinks();toast("Link removed");
+}
+function showLinksPage(){
+  $("#homePage").hidden=true;$("#linksPage").hidden=false;window.scrollTo({top:0,behavior:"smooth"});
+}
+function showHomePage(){
+  $("#linksPage").hidden=true;$("#homePage").hidden=false;window.scrollTo({top:0,behavior:"smooth"});
+}
 function toast(msg){const t=$("#toast");t.textContent=msg;t.classList.add("show");clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>t.classList.remove("show"),1700)}
 function openSettings(){$("#nameInput").value=state.name;$("#rateInput").value=state.rate;$("#settingsDialog").showModal()}
 $("#settingsBtn").onclick=$("#editProfileBtn").onclick=openSettings;
@@ -77,5 +125,8 @@ $("#clearMonthBtn").onclick=()=>{$("#confirmMonth").textContent=monthName(view);
 $("#confirmClearBtn").onclick=e=>{e.preventDefault();state.records[keyFor(view)]=[];save();$("#confirmDialog").close();render();toast("Month cleared")};
 $("#exportBtn").onclick=()=>window.print();
 $("#themeBtn").onclick=()=>{state.theme=state.theme==="dark"?"light":"dark";save();applyTheme();toast(`${state.theme==="dark"?"Dark":"Light"} mode`)};
+$("#linksBtn").onclick=$("#manageLinksBtn").onclick=showLinksPage;
+$("#backHomeBtn").onclick=showHomePage;
+$("#linkForm").onsubmit=e=>{e.preventDefault();const name=$("#linkNameInput").value.trim(),url=$("#linkUrlInput").value.trim();if(!name||!url)return;addLink(name,url);e.currentTarget.reset();$("#linkNameInput").focus()};
 function applyTheme(){document.body.classList.toggle("dark",state.theme==="dark")}
 applyTheme();render();
