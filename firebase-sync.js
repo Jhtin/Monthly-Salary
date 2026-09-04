@@ -1,0 +1,180 @@
+(() => {
+  const STORAGE_KEY = "workday.salary.tracker.v1";
+  const FIREBASE_VERSION = "12.18.0";
+  const firebaseConfig = {
+    apiKey: "AIzaSyAsT2xjwwctgZA7SLxGPUCekbgZcRBp9co",
+    authDomain: "workday-salary-tracker.firebaseapp.com",
+    projectId: "workday-salary-tracker",
+    storageBucket: "workday-salary-tracker.firebasestorage.app",
+    messagingSenderId: "1030934538072",
+    appId: "1:1030934538072:web:2d9438f49f51265993672d",
+    measurementId: "G-974CLENM0Z"
+  };
+
+  const originalSetItem = Storage.prototype.setItem;
+  let currentUser = null;
+  let cloudApi = null;
+  let syncingFromCloud = false;
+  let saveTimer = null;
+
+  function getLocalState() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); }
+    catch { return null; }
+  }
+
+  function stable(value) {
+    try { return JSON.stringify(value); }
+    catch { return ""; }
+  }
+
+  function setSyncStatus(text, tone = "") {
+    let el = document.getElementById("cloudStatus");
+    if (!el) {
+      el = document.createElement("span");
+      el.id = "cloudStatus";
+      el.style.cssText = "font-size:10px;font-weight:800;letter-spacing:.04em;color:var(--muted);white-space:nowrap";
+      document.querySelector(".header-actions")?.prepend(el);
+    }
+    if (el) {
+      el.textContent = text;
+      el.dataset.tone = tone;
+    }
+  }
+
+  function ensureAuthButton() {
+    const actions = document.querySelector(".header-actions");
+    if (!actions || document.getElementById("authBtn")) return;
+    const btn = document.createElement("button");
+    btn.id = "authBtn";
+    btn.type = "button";
+    btn.className = "button secondary";
+    btn.textContent = "Sign in";
+    btn.title = "Sign in to sync data across devices";
+    btn.addEventListener("click", async () => {
+      if (!cloudApi) return;
+      try {
+        if (currentUser) {
+          await cloudApi.signOut(cloudApi.auth);
+        } else {
+          await cloudApi.signInWithPopup(cloudApi.auth, cloudApi.provider);
+        }
+      } catch (error) {
+        console.error("Firebase sign-in error", error);
+        setSyncStatus("Sign-in failed", "error");
+      }
+    });
+    actions.prepend(btn);
+  }
+
+  function updateAuthUi(user) {
+    ensureAuthButton();
+    const btn = document.getElementById("authBtn");
+    if (!btn) return;
+    if (user) {
+      btn.textContent = user.displayName ? user.displayName.split(" ")[0] : "Signed in";
+      btn.title = `${user.email || "Signed in"} — click to sign out`;
+    } else {
+      btn.textContent = "Sign in";
+      btn.title = "Sign in with Google to sync data across devices";
+      setSyncStatus("Local only");
+    }
+  }
+
+  async function saveToCloud(state) {
+    if (!currentUser || !cloudApi || syncingFromCloud || !state) return;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(async () => {
+      try {
+        setSyncStatus("Saving…");
+        const ref = cloudApi.doc(cloudApi.db, "users", currentUser.uid);
+        await cloudApi.setDoc(ref, {
+          workday: state,
+          email: currentUser.email || null,
+          updatedAt: cloudApi.serverTimestamp()
+        }, { merge: true });
+        setSyncStatus("Synced");
+      } catch (error) {
+        console.error("Firestore save error", error);
+        setSyncStatus("Sync error", "error");
+      }
+    }, 350);
+  }
+
+  Storage.prototype.setItem = function(key, value) {
+    originalSetItem.call(this, key, value);
+    if (this === localStorage && key === STORAGE_KEY && !syncingFromCloud) {
+      try { saveToCloud(JSON.parse(value)); } catch {}
+    }
+  };
+
+  async function syncAfterLogin(user) {
+    if (!cloudApi || !user) return;
+    const ref = cloudApi.doc(cloudApi.db, "users", user.uid);
+    setSyncStatus("Syncing…");
+    try {
+      const snap = await cloudApi.getDoc(ref);
+      const localState = getLocalState();
+      if (snap.exists() && snap.data()?.workday) {
+        const remoteState = snap.data().workday;
+        if (stable(remoteState) !== stable(localState)) {
+          syncingFromCloud = true;
+          originalSetItem.call(localStorage, STORAGE_KEY, JSON.stringify(remoteState));
+          syncingFromCloud = false;
+          setSyncStatus("Synced");
+          if (sessionStorage.getItem("workday.cloud.reload") !== "1") {
+            sessionStorage.setItem("workday.cloud.reload", "1");
+            location.reload();
+            return;
+          }
+        }
+      } else if (localState) {
+        await cloudApi.setDoc(ref, {
+          workday: localState,
+          email: user.email || null,
+          updatedAt: cloudApi.serverTimestamp()
+        }, { merge: true });
+      }
+      sessionStorage.removeItem("workday.cloud.reload");
+      setSyncStatus("Synced");
+    } catch (error) {
+      console.error("Firestore sync error", error);
+      setSyncStatus("Sync error", "error");
+    }
+  }
+
+  async function init() {
+    ensureAuthButton();
+    setSyncStatus("Connecting…");
+    try {
+      const [appMod, authMod, firestoreMod] = await Promise.all([
+        import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-app.js`),
+        import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-auth.js`),
+        import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-firestore.js`)
+      ]);
+      const app = appMod.initializeApp(firebaseConfig);
+      const auth = authMod.getAuth(app);
+      const db = firestoreMod.getFirestore(app);
+      const provider = new authMod.GoogleAuthProvider();
+      cloudApi = {
+        auth, db, provider,
+        signInWithPopup: authMod.signInWithPopup,
+        signOut: authMod.signOut,
+        onAuthStateChanged: authMod.onAuthStateChanged,
+        doc: firestoreMod.doc,
+        getDoc: firestoreMod.getDoc,
+        setDoc: firestoreMod.setDoc,
+        serverTimestamp: firestoreMod.serverTimestamp
+      };
+      cloudApi.onAuthStateChanged(auth, async user => {
+        currentUser = user;
+        updateAuthUi(user);
+        if (user) await syncAfterLogin(user);
+      });
+    } catch (error) {
+      console.error("Firebase initialization error", error);
+      setSyncStatus("Offline", "error");
+    }
+  }
+
+  init();
+})();
