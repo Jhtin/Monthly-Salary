@@ -18,6 +18,8 @@
   let saveTimer = null;
   let unsubscribeCloud = null;
   let pendingRemoteState = null;
+  let pendingLocalSignature = "";
+  let pendingLocalState = null;
 
   function getLocalState() {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); }
@@ -138,18 +140,32 @@
   async function saveToCloud(nextState) {
     if (!currentUser || !cloudApi || syncingFromCloud || !nextState) return;
     clearTimeout(saveTimer);
+    pendingLocalState = nextState;
+    pendingLocalSignature = stable(nextState);
+    setSyncStatus("Saving…");
+
     saveTimer = setTimeout(async () => {
+      const stateToSave = pendingLocalState;
+      const signatureToSave = stable(stateToSave);
       try {
-        setSyncStatus("Saving…");
         const ref = cloudApi.doc(cloudApi.db, "users", currentUser.uid);
         await cloudApi.setDoc(ref, {
-          workday: nextState,
+          workday: stateToSave,
           email: currentUser.email || null,
           updatedAt: cloudApi.serverTimestamp()
         }, { merge: true });
-        setSyncStatus("Synced");
+
+        if (pendingLocalSignature === signatureToSave) {
+          pendingLocalSignature = "";
+          pendingLocalState = null;
+          setSyncStatus("Synced");
+        }
       } catch (error) {
         console.error("Firestore save error", error);
+        if (pendingLocalSignature === signatureToSave) {
+          pendingLocalSignature = "";
+          pendingLocalState = null;
+        }
         setSyncStatus(error?.code === "permission-denied" ? "Rules blocked sync" : "Sync error", "error");
       }
     }, 80);
@@ -158,7 +174,12 @@
   Storage.prototype.setItem = function(key, value) {
     originalSetItem.call(this, key, value);
     if (this === localStorage && key === STORAGE_KEY && !syncingFromCloud) {
-      try { saveToCloud(JSON.parse(value)); } catch {}
+      try {
+        const nextState = JSON.parse(value);
+        pendingLocalState = nextState;
+        pendingLocalSignature = stable(nextState);
+        saveToCloud(nextState);
+      } catch {}
     }
   };
 
@@ -189,6 +210,20 @@
     unsubscribeCloud = cloudApi.onSnapshot(ref, snap => {
       if (!snap.exists() || !snap.data()?.workday) return;
       const remoteState = snap.data().workday;
+      const remoteSignature = stable(remoteState);
+
+      // Never let an older cloud snapshot overwrite a click that is still being saved.
+      if (pendingLocalSignature) {
+        if (remoteSignature === pendingLocalSignature) {
+          if (!snap.metadata?.hasPendingWrites) {
+            pendingLocalSignature = "";
+            pendingLocalState = null;
+            setSyncStatus("Synced");
+          }
+        }
+        return;
+      }
+
       if (!applyRemoteState(remoteState)) setSyncStatus("Synced");
     }, error => {
       console.error("Firestore realtime sync error", error);
@@ -260,9 +295,13 @@
         updateAuthUi(user);
         if (user) {
           await syncAfterLogin(user);
-        } else if (unsubscribeCloud) {
-          unsubscribeCloud();
-          unsubscribeCloud = null;
+        } else {
+          pendingLocalSignature = "";
+          pendingLocalState = null;
+          if (unsubscribeCloud) {
+            unsubscribeCloud();
+            unsubscribeCloud = null;
+          }
         }
       });
     } catch (error) {
