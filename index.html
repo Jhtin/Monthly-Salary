@@ -10,12 +10,7 @@
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <div class="brand">
-        <div class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><path d="M7 3v3M17 3v3M4.5 9h15M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/><path d="m8.5 14 2 2 5-5"/></svg>
-        </div>
-        <div><h1>Workday</h1><p>Salary tracker</p></div>
-      </div>
+      <div class="brand"><div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3v3M17 3v3M4.5 9h15M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/><path d="m8.5 14 2 2 5-5"/></svg></div><div><h1>Workday</h1><p>Salary tracker</p></div></div>
       <div class="header-actions">
         <button class="button secondary" id="linksBtn"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.07.07l2-2a5 5 0 0 0-7.07-7.07l-1.15 1.15"/><path d="M14 11a5 5 0 0 0-7.07-.07l-2 2A5 5 0 0 0 12 20l1.15-1.15"/></svg>Links</button>
         <button class="icon-button" id="themeBtn" title="Toggle dark mode" aria-label="Toggle dark mode"><svg viewBox="0 0 24 24"><path d="M20.4 15.1A8.5 8.5 0 0 1 8.9 3.6 8.5 8.5 0 1 0 20.4 15.1Z"/></svg></button>
@@ -26,72 +21,22 @@
 
     <main>
       <section id="homePage">
-        <section class="hero">
-          <div><span class="eyebrow">Monthly attendance & pay</span><h2>Good day, <span id="heroName">Employee</span>.</h2><p>Select an employee, then click calendar dates to mark or unmark that employee's workdays.</p></div>
-          <div class="month-switcher"><button class="icon-button" id="prevMonth" aria-label="Previous month">‹</button><button class="month-button" id="monthLabel">August 2026</button><button class="icon-button" id="nextMonth" aria-label="Next month">›</button><button class="today-button" id="todayBtn">Today</button></div>
-        </section>
-
-        <section class="stats-grid">
-          <article class="stat-card accent"><div class="stat-icon"><svg viewBox="0 0 24 24"><path d="M7 3v3M17 3v3M4.5 9h15M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/></svg></div><div><span>Days worked</span><strong id="daysWorked">0</strong><small id="daysCaption">this month</small></div></article>
-          <article class="stat-card"><div class="stat-icon"><span>₱</span></div><div><span>Daily rate</span><strong id="dailyRate">₱500</strong><small>for selected employee</small></div></article>
-          <article class="stat-card total"><div class="stat-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v12H4zM7 7V5h10v2M8 12h8M8 15h5"/></svg></div><div><span>Salary earned</span><strong id="salaryEarned">₱0</strong><small id="salaryFormula">0 days × ₱500</small></div></article>
-        </section>
-
-        <section class="panel employees-card">
-          <div class="employees-header">
-            <div><span class="eyebrow">Team</span><h3>Employees</h3><p>Choose who you are marking on the calendar.</p></div>
-            <button class="button primary" id="addEmployeeBtn">+ Add employee</button>
-          </div>
-          <div id="employeeChips" class="employee-chips"></div>
-        </section>
-
-        <section class="panel quick-links-card">
-          <div class="quick-links-header">
-            <div><span class="eyebrow">Shortcuts</span><h3>Quick links</h3></div>
-            <button class="button secondary quick-manage-btn" id="manageLinksBtn">Manage links <span aria-hidden="true">→</span></button>
-          </div>
-          <div id="quickLinks" class="quick-links"></div>
-        </section>
-
-        <section class="content-grid">
-          <article class="panel calendar-panel">
-            <div class="panel-head"><div><h3 id="calendarTitle">August 2026</h3><p>Colored initials show which employees worked on each day.</p></div><div class="legend"><span class="legend-dot"></span> Selected employee</div></div>
-            <div class="weekdays"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
-            <div class="calendar" id="calendar"></div>
-            <div class="calendar-foot"><div><span class="mini-check">✓</span> <span id="markedSummary">No workdays marked yet</span></div><button class="text-button danger" id="clearMonthBtn">Clear selected employee</button></div>
-          </article>
-
-          <aside class="side-column">
-            <article class="panel profile-card"><div class="panel-head compact"><div><span class="eyebrow">Selected employee</span><h3 id="profileName">Employee</h3></div><button class="icon-button small" id="editProfileBtn" aria-label="Edit employee">✎</button></div><div class="profile-row"><span>Daily salary</span><strong id="profileRate">₱500</strong></div><div class="profile-row"><span>Current month</span><strong id="profileMonth">August 2026</strong></div><div class="progress-wrap"><div class="progress-label"><span>Month progress</span><span id="progressText">0%</span></div><div class="progress-track"><div class="progress-bar" id="progressBar"></div></div></div></article>
-            <article class="panel history-card"><div class="panel-head compact"><div><span class="eyebrow">Saved records</span><h3>Monthly history</h3></div></div><div id="historyList" class="history-list"></div></article>
-          </aside>
-        </section>
+        <section class="hero"><div><span class="eyebrow">Monthly attendance & pay</span><h2>Good day, <span id="heroName">Employee</span>.</h2><p>Select an employee, then click calendar dates to mark or unmark that employee's workdays.</p></div><div class="month-switcher"><button class="icon-button" id="prevMonth" aria-label="Previous month">‹</button><button class="month-button" id="monthLabel">August 2026</button><button class="icon-button" id="nextMonth" aria-label="Next month">›</button><button class="today-button" id="todayBtn">Today</button></div></section>
+        <section class="stats-grid"><article class="stat-card accent"><div class="stat-icon">✓</div><div><span>Days worked</span><strong id="daysWorked">0</strong><small id="daysCaption">this month</small></div></article><article class="stat-card"><div class="stat-icon">₱</div><div><span>Daily rate</span><strong id="dailyRate">₱500</strong><small>for selected employee</small></div></article><article class="stat-card total"><div class="stat-icon">₱</div><div><span>Salary earned</span><strong id="salaryEarned">₱0</strong><small id="salaryFormula">0 days × ₱500</small></div></article></section>
+        <section class="panel employees-card"><div class="employees-header"><div><span class="eyebrow">Team</span><h3>Employees</h3><p>Choose who you are marking on the calendar.</p></div><button class="button primary" id="addEmployeeBtn">+ Add employee</button></div><div id="employeeChips" class="employee-chips"></div></section>
+        <section class="panel quick-links-card"><div class="quick-links-header"><div><span class="eyebrow">Shortcuts</span><h3>Quick links</h3></div><button class="button secondary quick-manage-btn" id="manageLinksBtn">Manage links →</button></div><div id="quickLinks" class="quick-links"></div></section>
+        <section class="content-grid"><article class="panel calendar-panel"><div class="panel-head"><div><h3 id="calendarTitle">August 2026</h3><p>Colored initials show which employees worked on each day.</p></div><div class="legend"><span class="legend-dot"></span> Selected employee</div></div><div class="weekdays"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div><div class="calendar" id="calendar"></div><div class="calendar-foot"><div><span class="mini-check">✓</span> <span id="markedSummary">No workdays marked yet</span></div><button class="text-button danger" id="clearMonthBtn">Clear selected employee</button></div></article><aside class="side-column"><article class="panel profile-card"><div class="panel-head compact"><div><span class="eyebrow">Selected employee</span><h3 id="profileName">Employee</h3></div><button class="icon-button small" id="editProfileBtn" aria-label="Edit employee">✎</button></div><div class="profile-row"><span>Daily salary</span><strong id="profileRate">₱500</strong></div><div class="profile-row"><span>Current month</span><strong id="profileMonth">August 2026</strong></div><div class="progress-wrap"><div class="progress-label"><span>Month progress</span><span id="progressText">0%</span></div><div class="progress-track"><div class="progress-bar" id="progressBar"></div></div></div></article><article class="panel history-card"><div class="panel-head compact"><div><span class="eyebrow">Saved records</span><h3>Monthly history</h3></div></div><div id="historyList" class="history-list"></div></article></aside></section>
       </section>
 
-      <section id="linksPage" class="links-page" hidden>
-        <div class="page-title-row"><div><span class="eyebrow">Saved shortcuts</span><h2>My links</h2><p>Save your frequently used websites here. Logos are pulled automatically from the website unless you provide a custom logo URL.</p></div><button class="button secondary" id="backHomeBtn">← Back to home</button></div>
-        <section class="links-layout">
-          <article class="panel link-form-card">
-            <div class="panel-head compact"><div><span class="eyebrow">Add link</span><h3>New shortcut</h3></div></div>
-            <form id="linkForm" novalidate>
-              <label>Link name<input id="linkNameInput" maxlength="50" placeholder="e.g. Gmail" required></label>
-              <label>Website URL<input id="linkUrlInput" type="text" inputmode="url" autocapitalize="none" autocomplete="url" placeholder="google.com or https://google.com" required></label>
-              <label>Custom logo URL <span class="optional-label">Optional</span><input id="linkLogoInput" type="text" inputmode="url" autocapitalize="none" placeholder="https://example.com/logo.png"></label>
-              <p class="form-help">Leave the logo field empty to automatically use the website favicon. If no logo loads, an initial placeholder is shown.</p>
-              <button class="button primary full-button" type="submit">Save link</button>
-            </form>
-          </article>
-          <article class="panel saved-links-card"><div class="panel-head compact"><div><span class="eyebrow">Your links</span><h3>Saved shortcuts</h3></div></div><div id="savedLinksList" class="saved-links-list"></div></article>
-        </section>
-      </section>
+      <section id="linksPage" class="links-page" hidden><div class="page-title-row"><div><span class="eyebrow">Saved shortcuts</span><h2>My links</h2><p>Create, edit, open, and delete your saved shortcuts.</p></div><button class="button secondary" id="backHomeBtn">← Back to home</button></div><section class="links-layout"><article class="panel link-form-card"><div class="panel-head compact"><div><span class="eyebrow">Shortcut</span><h3 id="linkFormTitle">New shortcut</h3></div></div><form id="linkForm" novalidate><label>Link name<input id="linkNameInput" maxlength="50" placeholder="e.g. Gmail"></label><label>Website URL<input id="linkUrlInput" type="text" inputmode="url" autocapitalize="none" placeholder="google.com or https://google.com"></label><label>Custom logo URL <span class="optional-label">Optional</span><input id="linkLogoInput" type="text" inputmode="url" autocapitalize="none" placeholder="https://example.com/logo.png"></label><p class="form-help">Leave logo empty to use the website favicon.</p><div class="link-form-actions"><button class="button secondary" type="button" id="cancelLinkEditBtn" hidden>Cancel edit</button><button class="button primary" type="submit" id="saveLinkBtn">Save link</button></div></form></article><article class="panel saved-links-card"><div class="panel-head compact"><div><span class="eyebrow">Your links</span><h3>Saved shortcuts</h3></div></div><div id="savedLinksList" class="saved-links-list"></div></article></section></section>
     </main>
   </div>
 
-  <dialog id="settingsDialog"><form method="dialog" class="dialog-card" id="settingsForm"><div class="dialog-head"><div><span class="eyebrow">Employee</span><h3>Edit selected employee</h3></div><button class="icon-button" value="cancel" aria-label="Close">×</button></div><label>Employee name<input id="nameInput" maxlength="60" placeholder="Enter name" required></label><label>Daily salary rate (₱)<input id="rateInput" type="number" min="0" step="1" required></label><label>Calendar color<div class="color-input-row"><input id="editEmployeeColorInput" type="color" value="#1f7a4d"><span>Change this employee's color in the calendar.</span></div></label><div class="dialog-actions"><button class="button secondary" value="cancel">Cancel</button><button class="button primary" id="saveSettingsBtn" value="default">Save changes</button></div></form></dialog>
+  <dialog id="settingsDialog"><form class="dialog-card" id="settingsForm"><div class="dialog-head"><div><span class="eyebrow">Employee</span><h3>Edit selected employee</h3></div><button class="icon-button" type="button" id="closeSettingsBtn" aria-label="Close">×</button></div><label>Employee name<input id="nameInput" maxlength="60" placeholder="Enter name"></label><label>Daily salary rate (₱)<input id="rateInput" type="number" min="0" step="1"></label><label>Calendar color<div class="color-input-row"><input id="editEmployeeColorInput" type="color" value="#1f7a4d"><span>Change this employee's calendar color.</span></div></label><div class="dialog-actions split-actions"><button class="button danger-fill" type="button" id="deleteEmployeeBtn">Delete employee</button><span class="action-spacer"></span><button class="button secondary" type="button" id="cancelSettingsBtn">Cancel</button><button class="button primary" type="submit" id="saveSettingsBtn">Save changes</button></div></form></dialog>
 
-  <dialog id="employeeDialog"><form method="dialog" class="dialog-card" id="employeeForm"><div class="dialog-head"><div><span class="eyebrow">Team</span><h3>Add employee</h3></div><button class="icon-button" value="cancel" aria-label="Close">×</button></div><label>Employee name<input id="employeeNameInput" maxlength="60" placeholder="e.g. Rose" required></label><label>Daily salary rate (₱)<input id="employeeRateInput" type="number" min="0" step="1" value="500" required></label><label>Calendar color<div class="color-input-row"><input id="employeeColorInput" type="color" value="#1f7a4d"><span>Used for this employee's calendar badge.</span></div></label><div class="dialog-actions"><button class="button secondary" value="cancel">Cancel</button><button class="button primary" id="saveEmployeeBtn" value="default">Add employee</button></div></form></dialog>
+  <dialog id="employeeDialog"><form class="dialog-card" id="employeeForm"><div class="dialog-head"><div><span class="eyebrow">Team</span><h3>Add employee</h3></div><button class="icon-button" type="button" id="closeEmployeeBtn" aria-label="Close">×</button></div><label>Employee name<input id="employeeNameInput" maxlength="60" placeholder="e.g. Rose"></label><label>Daily salary rate (₱)<input id="employeeRateInput" type="number" min="0" step="1" value="500"></label><label>Calendar color<div class="color-input-row"><input id="employeeColorInput" type="color" value="#1f7a4d"><span>Used for this employee's calendar badge.</span></div></label><div class="dialog-actions"><button class="button secondary" type="button" id="cancelEmployeeBtn">Cancel</button><button class="button primary" type="submit" id="saveEmployeeBtn">Add employee</button></div></form></dialog>
 
-  <dialog id="confirmDialog"><form method="dialog" class="dialog-card confirm-card"><div class="confirm-icon">!</div><h3>Clear attendance?</h3><p>This will clear <span id="confirmMonth"></span>. Other employees will not be affected.</p><div class="dialog-actions centered"><button class="button secondary" value="cancel">Keep records</button><button class="button danger-fill" id="confirmClearBtn" value="default">Clear attendance</button></div></form></dialog>
+  <dialog id="confirmDialog"><div class="dialog-card confirm-card"><div class="confirm-icon">!</div><h3>Clear attendance?</h3><p>This will clear <span id="confirmMonth"></span>. Other employees will not be affected.</p><div class="dialog-actions centered"><button class="button secondary" type="button" id="cancelClearBtn">Keep records</button><button class="button danger-fill" type="button" id="confirmClearBtn">Clear attendance</button></div></div></dialog>
   <div class="toast" id="toast">Saved</div>
   <script src="app.js"></script>
 </body>
