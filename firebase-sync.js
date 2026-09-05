@@ -84,10 +84,42 @@
     catch(error){console.error("Firebase sign-in error",error);const code=error?.code||"";if(code==="auth/popup-blocked"||code==="auth/operation-not-supported-in-this-environment"||code==="auth/cancelled-popup-request"){await cloudApi.signInWithRedirect(cloudApi.auth,cloudApi.provider);return}if(code==="auth/unauthorized-domain")showGate("This domain is not authorized in Firebase.");else if(code!=="auth/popup-closed-by-user")showGate("Sign-in failed. Please try again.")}
   }
 
+  function requestLogout(){
+    if(!currentUser||!cloudApi)return;
+    const dialog=document.getElementById("actionConfirmDialog");
+    const card=document.getElementById("actionConfirmCard");
+    const kicker=document.getElementById("actionConfirmKicker");
+    const title=document.getElementById("actionConfirmTitle");
+    const message=document.getElementById("actionConfirmMessage");
+    const details=document.getElementById("actionConfirmDetails");
+    const cancel=document.getElementById("actionConfirmCancel");
+    const accept=document.getElementById("actionConfirmAccept");
+    const close=document.getElementById("actionConfirmClose");
+    if(!dialog||!card||!title||!message||!cancel||!accept){
+      if(window.confirm("Log out of Workday?"))cloudApi.signOut(cloudApi.auth);
+      return;
+    }
+    card.classList.remove("warning");card.classList.add("danger");
+    if(kicker)kicker.textContent="Account session";
+    title.textContent="Log out of Workday?";
+    message.textContent="You will be signed out and this device will return to the default sign-in screen.";
+    if(details){details.textContent="Your saved employees, attendance, salary records, and links will remain safely stored in your account.";details.classList.add("show")}
+    cancel.textContent="Stay signed in";
+    accept.textContent="Log out";
+    accept.className="button danger-fill";
+    const cleanup=()=>{cancel.onclick=null;accept.onclick=null;if(close)close.onclick=null;dialog.onclick=null};
+    const dismiss=()=>{cleanup();if(dialog.open)dialog.close()};
+    cancel.onclick=dismiss;
+    if(close)close.onclick=dismiss;
+    dialog.onclick=e=>{if(e.target===dialog)dismiss()};
+    accept.onclick=async()=>{dismiss();setSyncStatus("Signing out…");try{await cloudApi.signOut(cloudApi.auth)}catch(error){console.error("Firebase sign-out error",error);setSyncStatus("Sign-out failed","error")}};
+    dialog.showModal();
+  }
+
   function ensureAuthButton(){
     const actions=document.querySelector(".header-actions");if(!actions||document.getElementById("authBtn"))return;
     const btn=document.createElement("button");btn.id="authBtn";btn.type="button";btn.className="button secondary";btn.textContent="Sign in";
-    btn.onclick=async()=>{if(currentUser){await cloudApi.signOut(cloudApi.auth)}else signIn()};actions.prepend(btn);
+    btn.onclick=()=>{if(currentUser)requestLogout();else signIn()};actions.prepend(btn);
   }
   function updateAuthUi(user){ensureAuthButton();const btn=document.getElementById("authBtn");if(!btn)return;if(user){btn.textContent=user.displayName?user.displayName.split(" ")[0]:"Account";btn.title=`${user.email||"Signed in"} — click to sign out`}else{btn.textContent="Sign in";btn.title="Sign in with Google"}}
 
